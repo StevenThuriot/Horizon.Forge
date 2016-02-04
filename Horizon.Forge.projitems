@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>1de6c384-6d63-4880-837d-6773b41f89c0</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Horizon.Forge</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)DynamicTypeBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DynamicTypeWrapBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)EmptyMethodMemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)EventMemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)FieldMember.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)FieldMemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IMemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Member.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MethodMemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)PropertyMember.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)PropertyMemberDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TypeFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnknownMember.cs" />
+  </ItemGroup>
+</Project>
