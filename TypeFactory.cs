@@ -135,13 +135,13 @@ namespace Horizon.Forge
                 switch (binderName)
                 {
                     case "WITHINTERFACE":
-                        MarkInterface(args);
+                        MarkInterface(args.Cast<Type>().ToArray());
 
                         result = this;
                         break;
 
                     case "NOTIFYCHANGES":
-                        MarkNotifiable();
+                        MarkInterface(typeof(INotifyPropertyChanged));
 
                         result = this;
                         break;
@@ -181,35 +181,16 @@ namespace Horizon.Forge
 
                 _parent = (Type)args[0];
             }
-
-            void MarkNotifiable()
+            
+            void MarkInterface(params Type[] args)
             {
-                var propertyChangedInterface = typeof(INotifyPropertyChanged);
-
                 if (_interfaces == null)
                 {
-                    _interfaces = new HashSet<Type>
-                                      {
-                                          propertyChangedInterface
-                                      };
+                    _interfaces = new HashSet<Type>(args);
                 }
                 else
                 {
-                    _interfaces.Add(propertyChangedInterface);
-                }
-            }
-
-            void MarkInterface(object[] args)
-            {
-                var types = args.Cast<Type>();
-
-                if (_interfaces == null)
-                {
-                    _interfaces = new HashSet<Type>(types);
-                }
-                else
-                {
-                    foreach (var type in types)
+                    foreach (var type in args)
                         _interfaces.Add(type);
                 }
             }
