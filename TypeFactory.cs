@@ -130,9 +130,7 @@ namespace Horizon.Forge
 
             public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
             {
-                var binderName = binder.Name.ToUpperInvariant();
-
-                switch (binderName)
+                switch (binder.Name.ToUpperInvariant())
                 {
                     case "WITHINTERFACE":
                         MarkInterface(args.Cast<Type>().ToArray());
@@ -195,5 +193,86 @@ namespace Horizon.Forge
                 }
             }
         }
+
+        public class NewWrapFactory : TypeFactory
+        {
+            internal NewWrapFactory() { }
+
+            public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
+            {
+                if (args.Length == 0)
+                    throw new ArgumentException("Need one instance to wrap");
+
+                if (args.Length != 1)
+                    throw new NotSupportedException("Can only wrap one instace at a time");
+
+                result = DynamicTypeWrapBuilder.CreateTypeInstance(binder.Name, args[0]);
+                return true;
+            }
+        }
+        public class WrapFactory : TypeFactory
+        {
+            HashSet<Type> _interfaces;
+            Type _wrappedType;
+            bool _throwNotImplementedExceptions;
+
+            public override bool TryInvoke(InvokeBinder binder, object[] args, out object result)
+            {
+                if (args.Length == 0)
+                    throw new ArgumentException("Need one type to wrap");
+
+                if (args.Length != 1)
+                    throw new NotSupportedException("Can only wrap one type");
+
+
+                _wrappedType = args[0] as Type;
+
+                if (_wrappedType == null)
+                    throw new ArgumentException("Need to pass a type instance to wrap.");
+
+                result = this;
+                return true;
+            }
+
+            public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
+            {
+                result = this;
+
+                switch (binder.Name.ToUpperInvariant())
+                {
+                    case "WITH":
+                        var types = args.Cast<Type>();
+                        if (_interfaces == null)
+                        {
+                            _interfaces = new HashSet<Type>(types);
+                        }
+                        else
+                        {
+                            foreach (var type in types)
+                                _interfaces.Add(type);
+                        }
+                        break;
+
+                    case "THROWNOTIMPLEMENTED":
+                        _throwNotImplementedExceptions = true;
+                        break;
+
+                    default:
+
+                        if (_interfaces.Count == 0)
+                            throw new NotSupportedException("Need to specify at least one interface");
+
+
+                        if (_interfaces.Count != 1)
+                            throw new NotSupportedException("Only one interface is supported at this time");
+                        
+                        result = DynamicTypeWrapBuilder.CreateWrapper(binder.Name, _interfaces.First(), _wrappedType, _throwNotImplementedExceptions);
+                        break;
+                }
+
+                return true;
+            }
+        }
+
     }
 }

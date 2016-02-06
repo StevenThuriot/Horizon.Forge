@@ -32,9 +32,9 @@ namespace Horizon.Forge
         //TODO: Allow multiple interfaces
         //TODO: Check for internal methods / calls on the actual type. The generated IL code will not be able to call them.
         //TODO: Support parent class
-        public static Type CreateWrapper(Type interfaceWrapperType, Type actualType, bool throwNotImplemented)
+        public static Type CreateWrapper(string typeName, Type interfaceWrapperType, Type actualType, bool throwNotImplemented)
         {
-            var builder = DynamicTypeBuilder._HorizonModule.DefineType(interfaceWrapperType.Name + "Wrapper", WrapperClassAttributes);
+            var builder = DynamicTypeBuilder._HorizonModule.DefineType(typeName, WrapperClassAttributes);
             builder.AddInterfaceImplementation(interfaceWrapperType);
 
             var instanceField = builder.DefineField("_instance", actualType, InstaceFieldAttributes);
@@ -164,6 +164,8 @@ namespace Horizon.Forge
             }
 
             var type = builder.CreateType();
+            _typeCache[typeName] = type;
+
             return type;
         }
 
