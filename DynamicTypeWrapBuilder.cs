@@ -169,11 +169,11 @@ namespace Horizon.Forge
             return type;
         }
 
-        static void ThrowNotSupportedException(ILGenerator setIL)
+        static void ThrowNotSupportedException(ILGenerator generator)
         {
             var caller = Info<NotSupportedException>.Extended.DefaultConstructor;
-            setIL.Emit(OpCodes.Newobj, caller.ConstructorInfo);
-            setIL.Emit(OpCodes.Throw);
+            generator.Emit(OpCodes.Newobj, caller.ConstructorInfo);
+            generator.Emit(OpCodes.Throw);
         }
     }
 }
