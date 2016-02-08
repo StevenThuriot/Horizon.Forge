@@ -216,7 +216,7 @@ namespace Horizon.Forge
                 }
                 
                 
-                var setMethod = typeBuilder.DefineMethod("set_" + name, VirtPublicProperty, null, new[] {propertyInfo.MemberType});
+                var setMethod = typeBuilder.DefineMethod("set_" + name, VirtPublicProperty, typeof(void), new[] {propertyInfo.MemberType});
 
                 generator = setMethod.GetILGenerator();
                 generator.Emit(OpCodes.Ldarg_0);

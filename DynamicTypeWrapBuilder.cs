@@ -113,14 +113,7 @@ namespace Horizon.Forge
 
                     if (actualProperty == null || !actualProperty.CanRead)
                     {
-                        if (throwNotImplemented)
-                        {
-                            ThrowNotSupportedException(getIL);
-                        }
-                        else
-                        {
-                            EmptyMethodMemberDefinition.Build(propertyCaller.MemberType, getIL);
-                        }
+                        GenerateUnknownProperty(getIL, propertyCaller, throwNotImplemented);
                     }
                     else
                     {
@@ -135,20 +128,13 @@ namespace Horizon.Forge
 
                 if (property.CanWrite)
                 {
-                    var setBuilder = builder.DefineMethod("set_" + propertyCaller.Name, GetterSetterAttributes, null, new[] { property.PropertyType });
+                    var setBuilder = builder.DefineMethod("set_" + propertyCaller.Name, GetterSetterAttributes, typeof(void), new[] { property.PropertyType });
 
                     var setIL = setBuilder.GetILGenerator();
 
                     if (actualProperty == null || !actualProperty.CanWrite)
                     {
-                        if (throwNotImplemented)
-                        {
-                            ThrowNotSupportedException(setIL);
-                        }
-                        else
-                        {
-                            EmptyMethodMemberDefinition.Build(typeof(void), setIL);
-                        }
+                        GenerateUnknownProperty(setIL, propertyCaller, throwNotImplemented);
                     }
                     else
                     {
@@ -167,6 +153,19 @@ namespace Horizon.Forge
             _typeCache[typeName] = type;
 
             return type;
+        }
+
+
+        static void GenerateUnknownProperty(ILGenerator generator, IPropertyCaller propertyCaller, bool throwNotImplemented)
+        {
+            if (throwNotImplemented)
+            {
+                ThrowNotSupportedException(generator);
+            }
+            else
+            {
+                EmptyMethodMemberDefinition.Build(propertyCaller.MemberType, generator);
+            }
         }
 
         static void ThrowNotSupportedException(ILGenerator generator)
