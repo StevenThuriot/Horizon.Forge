@@ -210,11 +210,12 @@ namespace Horizon.Forge
                 return true;
             }
         }
+
         public class WrapFactory : TypeFactory
         {
             HashSet<Type> _interfaces;
             Type _wrappedType;
-            bool _throwNotImplementedExceptions;
+            bool _throwNotSupportedExceptions;
 
             public override bool TryInvoke(InvokeBinder binder, object[] args, out object result)
             {
@@ -253,8 +254,8 @@ namespace Horizon.Forge
                         }
                         break;
 
-                    case "THROWNOTIMPLEMENTED":
-                        _throwNotImplementedExceptions = true;
+                    case "THROWNOTSUPPORTED":
+                        _throwNotSupportedExceptions = true;
                         break;
 
                     default:
@@ -266,7 +267,7 @@ namespace Horizon.Forge
                         if (_interfaces.Count != 1)
                             throw new NotSupportedException("Only one interface is supported at this time");
                         
-                        result = DynamicTypeWrapBuilder.CreateWrapper(binder.Name, _interfaces.First(), _wrappedType, _throwNotImplementedExceptions);
+                        result = DynamicTypeWrapBuilder.CreateWrapper(binder.Name, _interfaces.First(), _wrappedType, _throwNotSupportedExceptions);
                         break;
                 }
 
