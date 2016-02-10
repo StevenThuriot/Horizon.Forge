@@ -32,8 +32,12 @@ namespace Horizon.Forge
         //TODO: Allow multiple interfaces
         //TODO: Check for internal methods / calls on the actual type. The generated IL code will not be able to call them.
         //TODO: Support parent class
-        public static Type CreateWrapper(string typeName, Type interfaceWrapperType, Type actualType, bool throwNotImplemented)
+        public static Type CreateWrapper(string typeName, Type interfaceWrapperType, Type actualType, bool throwNotSupported)
         {
+            Type type;
+            if (_typeCache.TryGetValue(typeName, out type))
+                return type;
+
             var builder = DynamicTypeBuilder._HorizonModule.DefineType(typeName, WrapperClassAttributes);
             builder.AddInterfaceImplementation(interfaceWrapperType);
 
@@ -85,7 +89,7 @@ namespace Horizon.Forge
                     methodGenerator.Emit(OpCodes.Call, actualMethod.MethodInfo);
                     methodGenerator.Emit(OpCodes.Ret);
                 }
-                else if (throwNotImplemented)
+                else if (throwNotSupported)
                 {
                     ThrowNotSupportedException(methodGenerator);
                 }
@@ -113,7 +117,7 @@ namespace Horizon.Forge
 
                     if (actualProperty == null || !actualProperty.CanRead)
                     {
-                        GenerateUnknownProperty(getIL, propertyCaller, throwNotImplemented);
+                        GenerateUnknownProperty(getIL, propertyCaller, throwNotSupported);
                     }
                     else
                     {
@@ -134,7 +138,7 @@ namespace Horizon.Forge
 
                     if (actualProperty == null || !actualProperty.CanWrite)
                     {
-                        GenerateUnknownProperty(setIL, propertyCaller, throwNotImplemented);
+                        GenerateUnknownProperty(setIL, propertyCaller, throwNotSupported);
                     }
                     else
                     {
@@ -149,8 +153,7 @@ namespace Horizon.Forge
                 }
             }
 
-            var type = builder.CreateType();
-            _typeCache[typeName] = type;
+            _typeCache[typeName] = type = builder.CreateType();
 
             return type;
         }
