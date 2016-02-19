@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Reflection.Emit;
 using Horizon;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Diagnostics.Contracts;
 
 namespace Horizon.Forge
 {
@@ -15,6 +17,7 @@ namespace Horizon.Forge
         const MethodAttributes GetterSetterAttributes = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
 
         static readonly Dictionary<string, Type> _typeCache = new Dictionary<string, Type>();
+        static readonly Dictionary<string, Delegate> _internalWrapperCache = new Dictionary<string, Delegate>();
 
         internal static dynamic CreateTypeInstance(string typeName, object instance)
         {
@@ -22,8 +25,33 @@ namespace Horizon.Forge
             if (!_typeCache.TryGetValue(typeName, out type))
                 throw new NotSupportedException("Unknown Horizon Wrapper type.");
 
+
             // Now we have our type. Let's create an instance from it:
-            var result = Info.Create(type, instance);
+
+            var actualType = instance.GetType();
+
+            dynamic result;
+            if (actualType.IsPublic)
+            {
+                result = Info.Create(type, instance);
+            }
+            else {
+                Delegate @delegate;
+
+                if (!_internalWrapperCache.TryGetValue(typeName, out @delegate))
+                {
+                    var method = new DynamicMethod("Create_" + typeName, type, new[] { actualType }, type.Module, skipVisibility: true);
+
+                    var generator = method.GetILGenerator();
+                    generator.Emit(OpCodes.Ldarg_0);
+                    generator.Emit(OpCodes.Newobj, type.GetConstructors().First());
+                    generator.Emit(OpCodes.Ret);
+
+                    _internalWrapperCache[typeName] = @delegate = method.Build();
+                }
+
+                result = @delegate.DynamicInvoke(instance);
+            }
 
             return result;
         }
@@ -34,6 +62,7 @@ namespace Horizon.Forge
         //TODO: Support parent class
         public static Type CreateWrapper(string typeName, Type interfaceWrapperType, Type actualType, bool throwNotSupported)
         {
+            Contract.Ensures(Contract.Result<Type>() != null);
             Type type;
             if (_typeCache.TryGetValue(typeName, out type))
                 return type;
@@ -64,7 +93,7 @@ namespace Horizon.Forge
             ctorGenerator.Emit(OpCodes.Stfld, instanceField);
             ctorGenerator.Emit(OpCodes.Ret);
 
-            var actualMethods = Info.Extended.Methods(actualType);
+            var actualMethods = Info.Extended.Methods(actualType).ToLookup(x => x.Name);
 
             foreach (var methodCaller in Info.Extended.Methods(interfaceWrapperType))
             {
@@ -79,15 +108,24 @@ namespace Horizon.Forge
                 methodGenerator.Emit(OpCodes.Ldarg_0);
                 methodGenerator.Emit(OpCodes.Ldfld, instanceField);
 
-                var actualMethod = Info.Extended.ResolveSpecificCaller(actualMethods, parameterTypes);
+                var relevantMethods = actualMethods[method.Name];
+                var actualMethod = Info.Extended.ResolveSpecificCaller(relevantMethods, parameterTypes, throwWhenNotfound: false);
 
                 if (actualMethod != null)
                 {
-                    for (int i = 1; i <= parameterTypes.Length; i++)
-                        methodGenerator.Emit(OpCodes.Ldarg_S, i);
+                    if (actualMethod.MethodInfo.IsPublic && actualType.IsPublic)
+                    {
+                        for (int i = 1; i <= parameterTypes.Length; i++)
+                            methodGenerator.Emit(OpCodes.Ldarg_S, i);
 
-                    methodGenerator.Emit(OpCodes.Call, actualMethod.MethodInfo);
-                    methodGenerator.Emit(OpCodes.Ret);
+                        methodGenerator.Emit(OpCodes.Call, actualMethod.MethodInfo);
+                        methodGenerator.Emit(OpCodes.Ret);
+                    }
+                    else
+                    {
+                        //TODO: Support this case;
+                        throw new NotSupportedException();
+                    }
                 }
                 else if (throwNotSupported)
                 {
@@ -121,9 +159,31 @@ namespace Horizon.Forge
                     }
                     else
                     {
+                        var getter = actualProperty.GetMethod;
+                        
                         getIL.Emit(OpCodes.Ldarg_0);
                         getIL.Emit(OpCodes.Ldfld, instanceField);
-                        getIL.Emit(OpCodes.Callvirt, actualProperty.GetMethod);
+
+                        if (getter.IsPublic && actualType.IsPublic)
+                        {
+                            getIL.Emit(OpCodes.Callvirt, getter);
+                        }
+                        else
+                        {
+                            getIL.Emit(OpCodes.Ldstr, InternalTypeHelper.Create(actualType));
+                            getIL.Emit(OpCodes.Ldstr, property.Name);
+                            getIL.Emit(OpCodes.Call, InternalTypeHelper.GetInternalPropertyMethod);
+
+                            if (property.PropertyType.IsValueType)
+                            {
+                                getIL.Emit(OpCodes.Unbox_Any, property.PropertyType);
+                            }
+                            else
+                            {
+                                getIL.Emit(OpCodes.Castclass, property.PropertyType);
+                            }
+                        }
+
                         getIL.Emit(OpCodes.Ret);
                     }
 
@@ -142,10 +202,29 @@ namespace Horizon.Forge
                     }
                     else
                     {
-                        setIL.Emit(OpCodes.Ldarg_0);
+                        var setter = actualProperty.SetMethod;
+                        var isPublic = setter.IsPublic && actualType.IsPublic;
+
+                        setIL.Emit(OpCodes.Ldarg_0);                        
                         setIL.Emit(OpCodes.Ldfld, instanceField);
+
+                        if (!isPublic)
+                        {
+                            setIL.Emit(OpCodes.Ldstr, InternalTypeHelper.Create(actualType));
+                            setIL.Emit(OpCodes.Ldstr, property.Name);
+                        }
+
                         setIL.Emit(OpCodes.Ldarg_1);
-                        setIL.Emit(OpCodes.Callvirt, actualProperty.SetMethod);
+
+                        if (isPublic)
+                        {
+                            setIL.Emit(OpCodes.Callvirt, actualProperty.SetMethod);
+                        }
+                        else
+                        {
+                            setIL.Emit(OpCodes.Call, InternalTypeHelper.SetInternalPropertyMethod);
+                        }
+
                         setIL.Emit(OpCodes.Ret);
                     }
 
@@ -176,6 +255,96 @@ namespace Horizon.Forge
             var caller = Info<NotSupportedException>.Extended.DefaultConstructor;
             generator.Emit(OpCodes.Newobj, caller.ConstructorInfo);
             generator.Emit(OpCodes.Throw);
+        }
+    }
+
+    
+    public class InternalTypeHelper 
+    {
+        public static readonly MethodInfo GetInternalPropertyMethod = typeof(InternalTypeHelper).GetMethod("GetInternalProperty");
+        public static readonly MethodInfo SetInternalPropertyMethod = typeof(InternalTypeHelper).GetMethod("SetInternalProperty");
+        public static readonly MethodInfo CallMethodMethod = typeof(InternalTypeHelper).GetMethod("CallMethod");
+
+        static readonly Dictionary<string, InternalTypeHelper> _cache = new Dictionary<string, InternalTypeHelper>();
+
+        public static string Create(Type type)
+        {
+            var value = type.ToString();
+            if (_cache.ContainsKey(value))
+                return value;
+
+            var helper = new InternalTypeHelper(type, value);
+            _cache[value] = helper;
+            return value;
+        }
+
+
+        private InternalTypeHelper(Type actualType, string actualTypeString)
+        {
+            _actualType = actualType;
+            _actualTypeString = actualTypeString;
+        }
+
+        public static object GetInternalProperty(object instance, string idx, string method)
+        {
+            return _cache[idx].InternalGet(instance, method);
+        }
+
+        public static void SetInternalProperty(object instance, string idx, string method, object value)
+        {
+            _cache[idx].InternalSet(instance, method, value);
+        }
+
+        readonly Dictionary<string, Func<object, object>> _get = new Dictionary<string, Func<object, object>>();
+        readonly Dictionary<string, Action<object, object>> _set = new Dictionary<string, Action<object, object>>();
+
+        private readonly Type _actualType;
+        private readonly string _actualTypeString;
+
+        public void InternalSet(object instance, string method, object value)
+        {
+            if (instance == null) throw new NullReferenceException();
+            
+
+            Action<object, object> @delegate;
+            if (!_set.TryGetValue(method, out @delegate))
+            {
+                var instanceParameter = Expression.Parameter(typeof(object), "instance");
+                var valueParameter = Expression.Parameter(typeof(object), "value");
+
+                var unboxInstance = Expression.Convert(instanceParameter, _actualType);
+
+                var propertyInfo = _actualType.GetProperty(method, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                var unboxValue = Expression.Convert(valueParameter, propertyInfo.PropertyType);
+
+                var setProperty = Expression.Call(unboxInstance, propertyInfo.SetMethod, unboxValue);
+
+                var lambda = Expression.Lambda<Action<object, object>>(setProperty, instanceParameter, valueParameter);
+
+                _set[method] = @delegate = lambda.Compile();
+            }
+
+            @delegate(instance, value);
+        }
+
+        public object InternalGet(object instance, string method)
+        {
+            if (instance == null) throw new NullReferenceException();
+                        
+            Func<object, object> @delegate;
+            if (!_get.TryGetValue(method, out @delegate))
+            {
+                var parameter = Expression.Parameter(typeof(object), "instance");
+                var unbox = Expression.Convert(parameter, _actualType);
+                var property = Expression.Property(unbox, method);
+                var propertyExpr = Expression.Convert(property, typeof(object));
+
+                var lambda = Expression.Lambda<Func<object, object>>(propertyExpr, parameter);
+
+                _get[method] = @delegate = lambda.Compile();
+            }
+
+            return @delegate(instance);
         }
     }
 }
