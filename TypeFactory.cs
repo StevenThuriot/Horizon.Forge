@@ -231,6 +231,9 @@ namespace Horizon.Forge
                 if (_wrappedType == null)
                     throw new ArgumentException("Need to pass a type instance to wrap.");
 
+                if (_wrappedType.IsAbstract && _wrappedType.IsSealed) //static class :)
+                    throw new NotSupportedException("Can't wrap a static class");
+
                 result = this;
                 return true;
             }
